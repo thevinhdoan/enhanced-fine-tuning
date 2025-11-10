@@ -1,4 +1,5 @@
 import gc
+import logging
 import random
 import time
 from tqdm import tqdm
@@ -32,10 +33,12 @@ def train(
     learning_rate,
     num_workers,
     # output
-    model_output_path
+    model_output_path,
+    tracker
 ):
 
     # Setup
+    logger = logging.getLogger(__name__)
     model.to(device)
     train_loss_fn = Loss(lambda_1=lambda_1, lambda_2=lambda_2)
     test_loss_fn = nn.CrossEntropyLoss(reduction='mean')
@@ -116,7 +119,17 @@ def train(
         train_loss_standard /= len(train_loader)
         train_accuracy = train_correct / len(train_loader.dataset)
         time_taken = time.time() - start_time
-        print(f"Epoch {epoch}/{num_epochs} - Train Loss: {train_loss:.4f} ({train_loss_standard:.4f}) - Train Accuracy: {train_accuracy:.4f} - Time: {time_taken:.2f}s")
+        logger.info("Epoch %d/%d - Train Loss: %.4f (%.4f) - Train Accuracy: %.4f - Time: %.2fs", 
+                    epoch, num_epochs, train_loss, train_loss_standard, train_accuracy, time_taken)
+        tracker.log_metrics(
+            {
+                "train_loss": train_loss,
+                "train_loss_standard": train_loss_standard,
+                "train_accuracy": train_accuracy,
+                "train_epoch_time_sec": time_taken,
+            },
+            step=epoch,
+        )
         
         #################### TESTING LOOP ################
         model.eval()
@@ -141,7 +154,16 @@ def train(
         test_loss /= len(test_loader)
         test_accuracy = test_correct / len(test_loader.dataset)
         time_taken = time.time() - start_time
-        print(f"Epoch {epoch}/{num_epochs} - Test Loss: {test_loss:.4f} - Test Accuracy: {test_accuracy:.4f} - Time: {time_taken:.2f}s")
+        logger.info("Epoch %d/%d - Test Loss: %.4f - Test Accuracy: %.4f - Time: %.2fs",
+                    epoch, num_epochs, test_loss, test_accuracy, time_taken)
+        tracker.log_metrics(
+            {
+                "test_loss": test_loss,
+                "test_accuracy": test_accuracy,
+                "test_epoch_time_sec": time_taken,
+            },
+            step=epoch,
+        )
 
         #################### CHECKPOINTING ################
         if test_loss < best_test_loss:
@@ -149,7 +171,15 @@ def train(
             best_train_accuracy = train_accuracy
             best_test_accuracy = test_accuracy
             torch.save(model.state_dict(), model_output_path)
-            print("New best checkpoint saved.")
+            logger.info("New best checkpoint saved to %s", model_output_path)
+            tracker.log_metrics(
+                {
+                    "best_test_loss": best_test_loss,
+                    "best_train_accuracy_so_far": best_train_accuracy,
+                    "best_test_accuracy_so_far": best_test_accuracy,
+                },
+                step=epoch,
+            )
     
     gc.collect()
     torch.cuda.empty_cache()

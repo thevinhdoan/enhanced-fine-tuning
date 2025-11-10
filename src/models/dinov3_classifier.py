@@ -5,6 +5,9 @@ import torch
 import torch.nn as nn
 from transformers import AutoModel
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class DINOv3Classifier(nn.Module):
     def __init__(self, pretrained_name: str, num_classes: int, freeze_backbone: bool = True, unfreeze_last_n: int = 0):
@@ -21,8 +24,8 @@ class DINOv3Classifier(nn.Module):
                 for p in layer.parameters():
                     p.requires_grad = True
 
-        print(f"Model initialized. Backbone frozen: {freeze_backbone}, last {unfreeze_last_n} layers unfrozen.")
-        print(f"Trainable params: {sum(p.numel() for p in self.parameters() if p.requires_grad)}")
+        logger.info(f"Model initialized. Backbone frozen: {freeze_backbone}, last {unfreeze_last_n} layers unfrozen.")
+        logger.info(f"Trainable params: {sum(p.numel() for p in self.parameters() if p.requires_grad)}")
 
     def forward(self, pixel_values):
         if all(not p.requires_grad for p in self.backbone.parameters()):
