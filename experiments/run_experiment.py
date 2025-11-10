@@ -1,4 +1,4 @@
-import argparse, json, logging, shlex, sys, tempfile
+import argparse, json, logging, os, shlex, sys, tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -73,7 +73,10 @@ def main():
     # 3. MLFLOW SETUP
     default_tracking_dir = Path("mlruns").resolve()
     default_tracking_dir.mkdir(parents=True, exist_ok=True)
-    mlflow.set_tracking_uri(default_tracking_dir.as_uri())
+    if os.getenv("MLFLOW_TRACKING_URI", None):
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    else:
+        mlflow.set_tracking_uri(default_tracking_dir.as_uri())
     mlflow.set_experiment(args.experiment_name)
     # 4. RUN NAME
     run_name = args.run_name or f"{grouping_name}-{model_name_safe}"
