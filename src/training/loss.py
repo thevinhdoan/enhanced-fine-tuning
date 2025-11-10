@@ -31,6 +31,8 @@ class Loss(nn.Module):
         # 2. Alignment term: encourage unlabeled samples to be close to their cluster centroids
         alignment_term = 0
         for centroid_id, member_ids in batch_grouping.items():
+            if centroid_id < 0 or len(member_ids) == 0:
+                continue
             centroid_probs = train_logits[centroid_id]
             centroid_probs = centroid_probs.unsqueeze(0)
             centroid_probs = centroid_probs.expand(len(member_ids), num_classes)

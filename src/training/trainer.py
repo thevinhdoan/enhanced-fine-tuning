@@ -21,8 +21,10 @@ def train(
     # grouping info
     full_dataset_grouping,
     # unlabeled data info
+    unlabeled_sampling_method,
     unlabeled_indices,
-    unlabeled_sample_size_per_class,
+    unlabeled_sample_size_per_cluster,
+    unlabeled_sample_size_total,
     unlabeled_batch_size,
     # hyperparams for loss
     lambda_1,
@@ -57,7 +59,6 @@ def train(
         train_correct = 0
         for batch_train_idx, batch_train in tqdm(enumerate(train_loader), total=len(train_loader)):
             model.train()
-            # batch_train_pixel_values, batch_train_labels, batch_train_indices = batch_train
             batch_train_pixel_values = batch_train["pixel_values"]
             batch_train_labels = batch_train["label"]
             batch_train_indices = batch_train["dataset_idx"]
@@ -65,32 +66,59 @@ def train(
             batch_train_labels = batch_train_labels.to(device)
 
             # ===== METHOD 1: SAMPLE SOME UNLABELED DATA FROM EACH CLUSTER =====
-            random.seed(42 + batch_train_idx + epoch)
-            batch_grouping = {}
-            batch_unlabeled_subsets = []
-            for i, idx in enumerate(batch_train_indices):
-                member_ids = full_dataset_grouping[idx.item()]
-                sampled_ids = [unlabeled_indices.index(x) for x in random.choices(member_ids, k=min(unlabeled_sample_size_per_class, len(member_ids)))]
-                batch_unlabeled_subsets.append(Subset(unlabeled_set, sampled_ids))
-                batch_grouping[i] = list(range(batch_grouping.get(i-1, [-1])[-1] + 1, batch_grouping.get(i-1, [-1])[-1] + 1 + len(sampled_ids)))
-            batch_unlabeled_set = ConcatDataset(batch_unlabeled_subsets)
-            batch_unlabeled_loader = DataLoader(
-                batch_unlabeled_set,
-                batch_size=unlabeled_batch_size,
-                shuffle=False,
-                num_workers=num_workers,
-                pin_memory=True
-            )
-            # =================================================================
+            if unlabeled_sampling_method == 1:
+                random.seed(42 + batch_train_idx + epoch)
+                batch_grouping = {}
+                batch_unlabeled_subsets = []
+                # Go through each cluster in the training batch and sample data points
+                for i, idx in enumerate(batch_train_indices):
+                    member_ids = full_dataset_grouping[idx.item()]
+                    sampled_ids = [unlabeled_indices.index(x) for x in random.sample(member_ids, k=min(unlabeled_sample_size_per_cluster, len(member_ids)))]
+                    batch_unlabeled_subsets.append(Subset(unlabeled_set, sampled_ids))
+                    batch_grouping[i] = list(range(batch_grouping.get(i-1, [-1])[-1] + 1, batch_grouping.get(i-1, [-1])[-1] + 1 + len(sampled_ids)))
+                assert sum(len(v) for v in batch_grouping.values()) == sum(len(s) for s in batch_unlabeled_subsets)
+                # Concatenate subsets from all clusters in the training batch
+                batch_unlabeled_set = ConcatDataset(batch_unlabeled_subsets)
+                batch_unlabeled_loader = DataLoader(
+                    batch_unlabeled_set,
+                    batch_size=unlabeled_batch_size,
+                    shuffle=False,
+                    num_workers=num_workers,
+                    pin_memory=True
+                )
 
             # ===== METHOD 2: DIRECTLY SAMPLE FROM THE UNLABELED SET =====
-            # ... (to be implemented) ...
-            # ============================================================
+            elif unlabeled_sampling_method == 2:
+                random.seed(42 + batch_train_idx + epoch)
+                batch_unlabeled_ids = random.sample(unlabeled_indices, k=unlabeled_sample_size_total)
+                # Create batch_grouping for the sampled unlabeled data
+                # Negative keys are used for clusters not in the current training batch
+                raw_grouping, batch_grouping = {}, {}
+                for cluster_idx, member_ids in full_dataset_grouping.items():
+                    raw_grouping[cluster_idx] = [i for i, x in enumerate(batch_unlabeled_ids) if x in member_ids]
+                for i, idx in enumerate(batch_train_indices):
+                    member_ids = raw_grouping[idx.item()]
+                    batch_grouping[i] = member_ids
+                for cluster_idx, member_ids in raw_grouping.items():
+                    if cluster_idx not in batch_train_indices:
+                        batch_grouping[-cluster_idx - 1] = member_ids
+                assert sum(len(v) for v in batch_grouping.values()) == unlabeled_sample_size_total
+                # Create dataset for the sampled unlabeled data
+                sampled_ids = [unlabeled_indices.index(x) for x in batch_unlabeled_ids]
+                batch_unlabeled_set = Subset(unlabeled_set, sampled_ids)
+                batch_unlabeled_loader = DataLoader(
+                    batch_unlabeled_set,
+                    batch_size=unlabeled_batch_size,
+                    shuffle=False,
+                    num_workers=num_workers,
+                    pin_memory=True
+                )
 
             # ===== METHOD 3: DIRECTLY SAMPLE FROM THE UNLABELED SET  =====
             # =============== & MAKE SURE ALL THE CLUSTERS ARE THERE  =====
             # ... (to be implemented) ...
-            # ============================================================
+            else:
+                raise ValueError(f"Unlabeled sampling method {unlabeled_sampling_method} not recognized.")
 
             batch_train_logits = model(pixel_values=batch_train_pixel_values)
             batch_unlabeled_logits = []

@@ -23,8 +23,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--json_grouping_path",                 type=str,   required=True)
     parser.add_argument("--train_batch_size",                   type=int,   default=64)
     parser.add_argument("--test_batch_size",                    type=int,   default=128)
+    parser.add_argument("--unlabeled_sampling_method",          type=int,   default=1)
     parser.add_argument("--unlabeled_batch_size",               type=int,   default=256)
-    parser.add_argument("--unlabeled_sample_size_per_class",    type=int,   default=32)
+    parser.add_argument("--unlabeled_sample_size_per_cluster",  type=int,   default=32)
+    parser.add_argument("--unlabeled_sample_size_total",        type=int,   default=512)
     parser.add_argument("--lambda_1",                           type=float, default=1.0)
     parser.add_argument("--lambda_2",                           type=float, default=1.0)
     parser.add_argument("--num_epochs",                         type=int,   default=10)
@@ -154,8 +156,10 @@ def main():
             test_loader=test_loader,
             unlabeled_set=unlabeled_dataset,
             full_dataset_grouping=grouping,
+            unlabeled_sampling_method=args.unlabeled_sampling_method,
             unlabeled_indices=unlabeled_indices,
-            unlabeled_sample_size_per_class=args.unlabeled_sample_size_per_class,
+            unlabeled_sample_size_per_cluster=args.unlabeled_sample_size_per_cluster,
+            unlabeled_sample_size_total=args.unlabeled_sample_size_total,
             unlabeled_batch_size=args.unlabeled_batch_size,
             lambda_1=args.lambda_1,
             lambda_2=args.lambda_2,
