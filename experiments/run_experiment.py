@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed",                               type=int,   default=42)
     parser.add_argument("--experiment_name",                    type=str,   default="thesis")
     parser.add_argument("--run_name",                           type=str,   default=None)
+    parser.add_argument("--grouping_update_interval",           type=int,   default=0)
     parser.set_defaults(freeze_backbone=True)
     return parser.parse_args()
 
@@ -159,6 +160,7 @@ def main():
             test_loader=test_loader,
             unlabeled_set=unlabeled_dataset,
             full_dataset_grouping=grouping,
+            grouping_update_interval=args.grouping_update_interval,
             unlabeled_sampling_method=args.unlabeled_sampling_method,
             unlabeled_indices=unlabeled_indices,
             unlabeled_sample_size_per_cluster=args.unlabeled_sample_size_per_cluster,

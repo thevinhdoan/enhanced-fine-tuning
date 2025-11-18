@@ -10,6 +10,7 @@ import torch.optim as optim
 from torch.utils.data import ConcatDataset, DataLoader, Subset
 
 from src.training.loss import Loss
+from src.grouping.updater import recompute_grouping
 
 
 def train(
@@ -20,6 +21,7 @@ def train(
     unlabeled_set,
     # grouping info
     full_dataset_grouping,
+    grouping_update_interval,
     # unlabeled data info
     unlabeled_sampling_method,
     unlabeled_indices,
@@ -48,6 +50,10 @@ def train(
     best_test_loss = float('inf')
     best_train_accuracy = 0.0
     best_test_accuracy = 0.0
+
+    base_dataset = getattr(getattr(train_loader, "dataset", None), "base_dataset", None)
+    if grouping_update_interval and grouping_update_interval > 0 and base_dataset is None:
+        raise ValueError("train_loader dataset must expose `base_dataset` when grouping updates are enabled")
 
     # Training
     for epoch in range(1, num_epochs + 1):
@@ -208,7 +214,26 @@ def train(
                 },
                 step=epoch,
             )
-    
+
+        #################### GROUPING UPDATE ################
+        if (
+            grouping_update_interval
+            and grouping_update_interval > 0
+            and epoch % grouping_update_interval == 0
+            and epoch < num_epochs
+        ):
+            effective_batch_size = 128
+            full_dataset_grouping = recompute_grouping(
+                model=model,
+                base_dataset=base_dataset,
+                train_indices=sorted(full_dataset_grouping.keys()),
+                unlabeled_indices=unlabeled_indices,
+                device=device,
+                batch_size=effective_batch_size,
+                num_workers=num_workers,
+            )
+            tracker.log_dict(full_dataset_grouping, f"grouping_epoch_{epoch}.json")
+
     gc.collect()
     torch.cuda.empty_cache()
 
